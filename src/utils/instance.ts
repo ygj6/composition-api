@@ -1,7 +1,7 @@
 import { ComponentInstance } from '../component'
 import vmStateManager from './vmStateManager'
 import { setCurrentInstance, getCurrentVue2Instance } from '../runtimeContext'
-import { Ref, isRef } from '../apis'
+import { Ref, isRef, isReactive } from '../apis'
 import { hasOwn, proxy, warn } from './utils'
 import { createSlotProxy, resolveSlots } from './helper'
 
@@ -20,8 +20,19 @@ export function asVmProperty(
         },
       })
     } else {
-      // @ts-ignore
-      vm[propName] = propValue
+      Object.defineProperty(vm, propName, {
+        enumerable: true,
+        configurable: true,
+        get: () => {
+          if (isReactive(propValue)) {
+            ;(propValue as any).__ob__.dep.depend()
+          }
+          return propValue
+        },
+        set: (val) => {
+          propValue = val
+        },
+      })
     }
 
     if (__DEV__) {
@@ -36,7 +47,12 @@ export function asVmProperty(
             },
           })
         } else {
-          vm._data[propName] = propValue
+          proxy(vm._data, propName, {
+            get: () => propValue,
+            set: (val: any) => {
+              propValue = val
+            },
+          })
         }
       })
     }
